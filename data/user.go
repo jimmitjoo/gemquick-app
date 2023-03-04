@@ -55,7 +55,7 @@ func (u *User) Find(id int) (*User, error) {
 	var token Token
 
 	collection = upper.Collection(token.Table())
-	res = collection.Find(up.Cond{"user_id =": user.ID, "expiry <": time.Now()}).OrderBy("created_at desc").Limit(1)
+	res = collection.Find(up.Cond{"user_id =": user.ID, "expiry >": time.Now()}).OrderBy("created_at desc").Limit(1)
 	err = res.One(&token)
 
 	if err != nil {
@@ -83,7 +83,7 @@ func (u *User) ByEmail(email string) (*User, error) {
 
 	var token Token
 	collection = upper.Collection(token.Table())
-	res = collection.Find(up.Cond{"user_id =": user.ID, "expiry <": time.Now()}).OrderBy("created_at desc").Limit(1)
+	res = collection.Find(up.Cond{"user_id =": user.ID, "expiry >": time.Now()}).OrderBy("created_at desc").Limit(1)
 	err = res.One(&token)
 
 	if err != nil {
