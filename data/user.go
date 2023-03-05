@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/jimmitjoo/gemquick"
 	up "github.com/upper/db/v4"
 )
 
@@ -23,6 +24,12 @@ type User struct {
 
 func (u *User) Table() string {
 	return "users"
+}
+
+func (u *User) Validate(validator *gemquick.Validation) {
+	validator.Check(u.FirstName != "", "first_name", "this field is required")
+	validator.Check(u.LastName != "", "last_name", "this field is required")
+	validator.IsEmail("email", u.Email)
 }
 
 func (u *User) All() ([]*User, error) {

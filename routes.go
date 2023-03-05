@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"myapp/data"
 	"net/http"
 	"strconv"
@@ -8,15 +9,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (a *application) routes() *chi.Mux {
+func (route *application) routes() *chi.Mux {
 	// middleware must come before any routes
 
 	// add routes here
-	a.App.Routes.Get("/", a.Handlers.Home)
-	a.App.Routes.Get("/go-page", a.Handlers.GoPage)
-	a.App.Routes.Get("/jet-page", a.Handlers.JetPage)
-	a.App.Routes.Get("/sessions", a.Handlers.SessionTest)
-	a.App.Routes.Get("/create-user", func(w http.ResponseWriter, r *http.Request) {
+	route.get("/", route.Handlers.Home)
+	route.get("/go-page", route.Handlers.GoPage)
+	route.get("/jet-page", route.Handlers.JetPage)
+	route.get("/sessions", route.Handlers.SessionTest)
+	route.get("/login", route.Handlers.UserLogin)
+	route.post("/login", route.Handlers.PostUserLogin)
+	route.get("/logout", route.Handlers.UserLogout)
+	route.get("/form", route.Handlers.Form)
+	route.post("/form", route.Handlers.PostForm)
+
+	route.get("/json", route.Handlers.Json)
+	route.get("/xml", route.Handlers.XML)
+	route.get("/download-file", route.Handlers.DownloadFile)
+	route.get("/crypto", route.Handlers.TestCrypto)
+
+	route.get("/create-user", func(w http.ResponseWriter, r *http.Request) {
 		// Create a new user
 		user := data.User{
 			FirstName: "Daota",
@@ -27,67 +39,75 @@ func (a *application) routes() *chi.Mux {
 		}
 
 		// Insert the user into the database
-		id, err := a.Models.Users.Create(user)
+		id, err := route.Models.Users.Create(user)
 		if err != nil {
-			a.App.ErrorLog.Println("error inserting user:", err)
+			route.App.ErrorLog.Println("error inserting user:", err)
 		}
 
-		a.App.InfoLog.Println("user inserted with id:", id)
+		route.App.InfoLog.Println("user inserted with id:", id)
 	})
-	a.App.Routes.Get("/all-users", func(w http.ResponseWriter, r *http.Request) {
-		users, err := a.Models.Users.All()
+	route.get("/all-users", func(w http.ResponseWriter, r *http.Request) {
+		users, err := route.Models.Users.All()
 		if err != nil {
-			a.App.ErrorLog.Println("error getting all users:", err)
+			route.App.ErrorLog.Println("error getting all users:", err)
 		}
 
 		for _, x := range users {
-			a.App.InfoLog.Println("user:", x.FirstName, x.LastName, x.Email)
+			route.App.InfoLog.Println("user:", x.FirstName, x.LastName, x.Email)
 		}
 	})
-	a.App.Routes.Get("/user/{id}", func(w http.ResponseWriter, r *http.Request) {
+	route.get("/user/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		user_id, err := strconv.Atoi(id)
 		if err != nil {
-			a.App.ErrorLog.Println("error converting id:", err)
+			route.App.ErrorLog.Println("error converting id:", err)
 		}
-		user, err := a.Models.Users.Find(user_id)
+		user, err := route.Models.Users.Find(user_id)
 		if err != nil {
-			a.App.ErrorLog.Println("error getting user:", err)
+			route.App.ErrorLog.Println("error getting user:", err)
 		}
 
-		a.App.InfoLog.Println("user:", user.FirstName, user.LastName, user.Email)
+		route.App.InfoLog.Println("user:", user.FirstName, user.LastName, user.Email)
 	})
-	a.App.Routes.Get("/update-user/{id}", func(w http.ResponseWriter, r *http.Request) {
+	route.get("/update-user/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		user_id, err := strconv.Atoi(id)
 		if err != nil {
-			a.App.ErrorLog.Println("error converting id:", err)
+			route.App.ErrorLog.Println("error converting id:", err)
 		}
-		oldUser, err := a.Models.Users.Find(user_id)
+		oldUser, err := route.Models.Users.Find(user_id)
 		if err != nil {
-			a.App.ErrorLog.Println("error getting user:", err)
+			route.App.ErrorLog.Println("error getting user:", err)
 		}
 
 		oldUser.FirstName = "Daota"
-		oldUser.LastName = "Nguyen"
-		oldUser.Email = "new@email.com"
+		oldUser.LastName = ""
+		oldUser.Email = ""
 
-		user, err := a.Models.Users.Update(*oldUser)
-		if err != nil {
-			a.App.ErrorLog.Println("error updating user:", err)
+		validator := route.App.Validator(nil)
+		oldUser.Validate(validator)
+
+		if !validator.Valid() {
+			fmt.Fprint(w, validator.Errors)
+			return
 		}
 
-		a.App.InfoLog.Println("user updated:", user.FirstName, user.LastName, user.Email)
+		user, err := route.Models.Users.Update(*oldUser)
+		if err != nil {
+			route.App.ErrorLog.Println("error updating user:", err)
+		}
+
+		route.App.InfoLog.Println("user updated:", user.FirstName, user.LastName, user.Email)
 
 	})
 
-	a.App.Routes.Get("/jet", func(w http.ResponseWriter, r *http.Request) {
-		a.App.Render.JetPage(w, r, "testjet", nil, nil)
+	route.get("/jet", func(w http.ResponseWriter, r *http.Request) {
+		route.App.Render.JetPage(w, r, "testjet", nil, nil)
 	})
 
 	// static routes
 	fileServer := http.FileServer(http.Dir("./public"))
-	a.App.Routes.Handle("/public/*", http.StripPrefix("/public", fileServer))
+	route.App.Routes.Handle("/public/*", http.StripPrefix("/public", fileServer))
 
-	return a.App.Routes
+	return route.App.Routes
 }

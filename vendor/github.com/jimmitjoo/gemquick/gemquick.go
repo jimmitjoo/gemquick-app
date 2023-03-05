@@ -19,18 +19,19 @@ import (
 const version = "0.0.1"
 
 type Gemquick struct {
-	AppName  string
-	Debug    bool
-	Version  string
-	ErrorLog *log.Logger
-	InfoLog  *log.Logger
-	RootPath string
-	Routes   *chi.Mux
-	Render   *render.Render
-	Session  *scs.SessionManager
-	DB       Database
-	JetViews *jet.Set
-	config   config
+	AppName       string
+	Debug         bool
+	Version       string
+	ErrorLog      *log.Logger
+	InfoLog       *log.Logger
+	RootPath      string
+	Routes        *chi.Mux
+	Render        *render.Render
+	Session       *scs.SessionManager
+	DB            Database
+	JetViews      *jet.Set
+	config        config
+	EncryptionKey string
 }
 
 type config struct {
@@ -79,8 +80,9 @@ func (g *Gemquick) New(rootPath string) error {
 		}
 
 		g.DB = Database{
-			DataType: os.Getenv("DATABASE_TYPE"),
-			Pool:     db,
+			DataType:    os.Getenv("DATABASE_TYPE"),
+			Pool:        db,
+			TablePrefix: os.Getenv("DATABASE_TABLE_PREFIX"),
 		}
 	}
 
@@ -115,9 +117,11 @@ func (g *Gemquick) New(rootPath string) error {
 		CookieName:     g.config.cookie.name,
 		SessionType:    g.config.sessionType,
 		CookieDomain:   g.config.cookie.domain,
+		DBPool:         g.DB.Pool,
 	}
 
 	g.Session = sess.InitSession()
+	g.EncryptionKey = os.Getenv("KEY")
 
 	var views = jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
@@ -189,6 +193,7 @@ func (g *Gemquick) createRenderer() {
 		RootPath: g.RootPath,
 		Port:     g.config.port,
 		JetViews: g.JetViews,
+		Session:  g.Session,
 	}
 
 	g.Render = &myRenderer
