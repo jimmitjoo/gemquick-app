@@ -28,6 +28,12 @@ func (route *application) routes() *chi.Mux {
 	route.get("/download-file", route.Handlers.DownloadFile)
 	route.get("/crypto", route.Handlers.TestCrypto)
 
+	route.get("/cache-test", route.Handlers.ShowCachePage)
+	route.post("/api/save-in-cache", route.Handlers.SaveInCache)
+	route.post("/api/get-from-cache", route.Handlers.GetFromCache)
+	route.post("/api/delete-from-cache", route.Handlers.DeleteFromCache)
+	route.post("/api/empty-cache", route.Handlers.EmptyCache)
+
 	route.get("/create-user", func(w http.ResponseWriter, r *http.Request) {
 		// Create a new user
 		user := data.User{

@@ -11,12 +11,16 @@ import (
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/gomodule/redigo/redis"
+	"github.com/jimmitjoo/gemquick/cache"
 	"github.com/jimmitjoo/gemquick/render"
 	"github.com/jimmitjoo/gemquick/session"
 	"github.com/joho/godotenv"
 )
 
 const version = "0.0.1"
+
+var myRedisCache *cache.RedisCache
 
 type Gemquick struct {
 	AppName       string
@@ -32,6 +36,7 @@ type Gemquick struct {
 	JetViews      *jet.Set
 	config        config
 	EncryptionKey string
+	Cache         cache.Cache
 }
 
 type config struct {
@@ -40,6 +45,7 @@ type config struct {
 	cookie      cookieConfig
 	sessionType string
 	database    databaseConfig
+	redis       redisConfig
 }
 
 func (g *Gemquick) New(rootPath string) error {
@@ -86,6 +92,12 @@ func (g *Gemquick) New(rootPath string) error {
 		}
 	}
 
+	// connect to redis
+	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
+		myRedisCache = g.createClientRedisCache()
+		g.Cache = myRedisCache
+	}
+
 	g.InfoLog = infoLog
 	g.ErrorLog = errorLog
 	g.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
@@ -108,6 +120,12 @@ func (g *Gemquick) New(rootPath string) error {
 			database: os.Getenv("DATABASE_TYPE"),
 			dsn:      g.BuildDSN(),
 		},
+		redis: redisConfig{
+			host:     os.Getenv("REDIS_HOST"),
+			port:     os.Getenv("REDIS_PORT"),
+			password: os.Getenv("REDIS_PASSWORD"),
+			prefix:   os.Getenv("REDIS_PREFIX"),
+		},
 	}
 
 	// create a session
@@ -120,12 +138,19 @@ func (g *Gemquick) New(rootPath string) error {
 		DBPool:         g.DB.Pool,
 	}
 
+	switch g.config.sessionType {
+	case "redis":
+		sess.RedisPool = myRedisCache.Conn
+	case "mysql", "postgres", "mariadb", "postgresql", "pgx":
+		sess.DBPool = g.DB.Pool
+	}
+
 	g.Session = sess.InitSession()
 	g.EncryptionKey = os.Getenv("KEY")
 
 	var views = jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
-		jet.InDevelopmentMode(),
+		//jet.InDevelopmentMode(),
 	)
 
 	g.JetViews = views
@@ -197,6 +222,43 @@ func (g *Gemquick) createRenderer() {
 	}
 
 	g.Render = &myRenderer
+}
+
+func (g *Gemquick) createClientRedisCache() *cache.RedisCache {
+	cacheClient := cache.RedisCache{
+		Conn:   g.createRedisPool(),
+		Prefix: g.config.redis.prefix,
+	}
+	return &cacheClient
+}
+
+func (g *Gemquick) createRedisPool() *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     3,
+		MaxActive:   10000,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", fmt.Sprintf("%s:%s", os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT")))
+
+			if err != nil {
+				return nil, err
+			}
+
+			if os.Getenv("REDIS_PASSWORD") != "" {
+				if _, err := c.Do("AUTH", os.Getenv("REDIS_PASSWORD")); err != nil {
+					c.Close()
+					return nil, err
+				}
+			}
+
+			return c, err
+		},
+
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 }
 
 func (g *Gemquick) BuildDSN() string {

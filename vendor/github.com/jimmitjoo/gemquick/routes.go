@@ -18,6 +18,7 @@ func (g *Gemquick) routes() http.Handler {
 
 	mux.Use(middleware.Recoverer)
 	mux.Use(g.SessionLoad)
+	mux.Use(g.NoSurf)
 
 	return mux
 }
